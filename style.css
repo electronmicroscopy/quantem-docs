@@ -1,0 +1,199 @@
+/* ============================================================
+   quantem-docs — custom theming on top of MyST book-theme.
+   Loaded via `site.options.style` in myst.yml.
+
+   Accent: dark red rgb(204,0,0), lightened slightly in dark
+   mode for contrast on the dark background.
+   ============================================================ */
+
+:root {
+  --qem-accent: rgb(204, 0, 0);
+  --qem-accent-soft: rgba(204, 0, 0, 0.12);
+}
+html.dark {
+  --qem-accent: rgb(232, 81, 73);
+  --qem-accent-soft: rgba(232, 81, 73, 0.18);
+}
+
+/* ---------- Site title (upper-left) ---------- */
+.myst-home-link,
+.myst-home-link span {
+  color: var(--qem-accent) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.myst-home-link:hover span {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+}
+
+/* ---------- Top-nav links ---------- */
+.myst-top-nav-item {
+  font-weight: 500;
+}
+
+/* ---------- Article links ----------
+   Scoped to <article> so the home-link and navbar controls keep
+   their own colors. */
+article a:not(.myst-home-link),
+article .link,
+article .hover-link {
+  color: var(--qem-accent) !important;
+}
+
+/* Cards: red title, neutral body text */
+article a.myst-card {
+  color: inherit !important;
+}
+article a.myst-card .myst-card-title {
+  color: var(--qem-accent);
+}
+article a.myst-card:hover {
+  border-color: var(--qem-accent) !important;
+}
+
+/* ---------- Places book-theme still uses Tailwind blue ---------- */
+.myst-tab-item-header-active {
+  color: var(--qem-accent) !important;
+  border-bottom-color: var(--qem-accent) !important;
+}
+.myst-toc-item.active,
+.myst-toc-item-exact {
+  background-color: var(--qem-accent-soft) !important;
+}
+.myst-toc-item:focus,
+.myst-toc-item:focus-visible {
+  outline-color: var(--qem-accent) !important;
+}
+.myst-code-copy-icon {
+  color: var(--qem-accent) !important;
+}
+.myst-code-copy-icon:hover {
+  opacity: 0.7;
+}
+.outline-blue-200 {
+  outline-color: var(--qem-accent-soft) !important;
+}
+button.myst-search-bar:hover {
+  border-color: var(--qem-accent) !important;
+  --tw-ring-color: var(--qem-accent) !important;
+}
+
+/* ---------- Inline code spans ---------- */
+:not(pre) > code {
+  color: rgb(190, 24, 93);
+}
+html.dark :not(pre) > code {
+  color: rgb(244, 114, 182);
+}
+
+/* ---------- Left sidebar ----------
+   Smaller type, tighter rhythm, bold top-level sections. */
+.myst-primary-sidebar-toc {
+  font-size: 0.85rem;
+}
+.myst-primary-sidebar-toc .myst-toc-item {
+  margin-top: 0.125rem;
+  margin-bottom: 0.125rem;
+}
+.myst-primary-sidebar-toc a.myst-toc-item {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+.myst-primary-sidebar-toc .myst-toc-item > div {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+.myst-primary-sidebar-toc button svg {
+  height: 1.1rem;
+  width: 1.1rem;
+}
+/* Top-level sections (Get Started, User Guide, ...) in bold */
+.myst-toc > div > .myst-toc-item {
+  font-weight: 700;
+}
+/* The site title is already in the top bar; drop the duplicate
+   root entry at the top of the sidebar. */
+.myst-toc > a.myst-toc-item[title="quantEM"] {
+  display: none;
+}
+
+/* ---------- Search ----------
+   Wider trigger, and the dialog positioned directly over the top-bar
+   box (no dimmed backdrop) so opening it feels like typing in place. */
+@media (min-width: 640px) {
+  button.myst-search-bar {
+    width: 20rem;
+  }
+  .myst-search-dialog {
+    left: auto !important;
+    right: 3.2rem;
+    transform: none !important;
+    top: 6px !important;
+    width: 21rem !important;
+    max-width: 21rem !important;
+    padding: 0.5rem !important;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  }
+  html.dark .myst-search-dialog {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+.fixed.inset-0.bg-\[\#656c85cc\] {
+  background: transparent !important;
+}
+.myst-search-dialog [aria-selected="true"] .group-aria-selected\:bg-blue-600 {
+  background-color: var(--qem-accent) !important;
+}
+
+/* ---------- Hide the article-style frontmatter strip ---------- */
+.myst-fm-block-header,
+.myst-fm-block-date-doi,
+header.myst-fm-authors-affiliations {
+  display: none !important;
+}
+
+/* ---------- Landing page: layered, hover-animated logo ----------
+   The logo is stacked from the wordmark base plus one SVG layer per
+   element. A runtime injected by scripts/patch_theme.py inlines the
+   layers and runs an element's animations only while hovered; leaving
+   it pauses in place. Percentages come from scripts/build_logo.py. */
+.qem-logo-box {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  justify-self: center;
+  margin: 3.5rem auto 0.5rem auto;
+}
+.qem-logo-box p {
+  margin: 0;
+}
+.qem-logo-box .qem-lbase {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 460.8 / 266.4;
+}
+.qem-logo-box .qem-el {
+  position: absolute;
+  display: block;
+  height: auto;
+}
+.qem-el-eels   { left: 2.19%;  top: 5.12%;  width: 56.22%; aspect-ratio: 259.06 / 148.09; }
+.qem-el-dif    { left: 13.46%; top: 5.22%;  width: 29.92%; aspect-ratio: 137.87 / 115.78; }
+.qem-el-struct { left: 39.82%; top: 14.11%; width: 23.44%; aspect-ratio: 108.03 / 108.00; }
+.qem-el-tomo   { left: 59.44%; top: 15.96%; width: 38.14%; aspect-ratio: 175.76 / 91.60; }
+
+/* Light/dark variants follow the book-theme html.dark toggle. */
+html:not(.dark) .qem-logo-box .qem-logo-dark { display: none; }
+html.dark .qem-logo-box .qem-logo-light { display: none; }
+
+.qem-tagline {
+  text-align: center;
+  font-size: 1.15rem;
+  opacity: 0.85;
+  max-width: 42rem;
+  margin: 1rem auto 1.5rem auto;
+}

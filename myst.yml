@@ -1,0 +1,73 @@
+# MyST configuration for the quantEM documentation site.
+# See: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  id: quantem-docs
+  title: quantEM
+  description: Documentation for quantEM, a quantitative electron microscopy analysis toolkit.
+  keywords:
+    - electron microscopy
+    - TEM
+    - STEM
+    - 4D-STEM
+    - ptychography
+    - tomography
+  github: https://github.com/electronmicroscopy/quantem
+  license: MIT
+  exclude:
+    - README.md
+  toc:
+    - file: index.md
+    - title: Get Started
+      children:
+        - file: get-started/overview.md
+        - file: get-started/installation.md
+        - file: get-started/package-structure.md
+    - title: User Guide
+      children:
+        - file: user-guide/datasets.md
+        - file: user-guide/visualization.md
+        - file: user-guide/imaging/index.md
+          children:
+            - file: user-guide/imaging/drift-correction.md
+            - file: user-guide/imaging/lattice-analysis.md
+        - file: user-guide/diffraction/index.md
+          children:
+            - file: user-guide/diffraction/disk-detection.md
+            - file: user-guide/diffraction/strain-mapping.md
+        - file: user-guide/diffractive-imaging/index.md
+          children:
+            - file: user-guide/diffractive-imaging/ptychography.md
+            - file: user-guide/diffractive-imaging/direct-ptychography.md
+        - file: user-guide/tomography/index.md
+          children:
+            - file: user-guide/tomography/reconstruction.md
+        - file: user-guide/spectroscopy/index.md
+    - title: Reference
+      children:
+        - file: reference/api.md
+        - file: reference/configuration.md
+        - file: reference/gpu.md
+        - file: reference/data-io.md
+    - title: Project
+      children:
+        - file: project/cite.md
+        - file: project/contribute.md
+        - file: project/license.md
+site:
+  template: book-theme
+  title: quantEM
+  options:
+    # Custom theming — see ./style.css
+    style: ./style.css
+    logo_text: quantEM
+    folders: true
+    outline_maxdepth: 2
+    hide_footer_links: true
+  nav:
+    - title: Tutorials
+      url: https://github.com/electronmicroscopy/quantem-tutorials
+    - title: PyPI Install
+      url: https://pypi.org/project/quantem/
+    - title: Code
+      url: https://github.com/electronmicroscopy/quantem

@@ -1,0 +1,62 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, but don't cancel in-progress runs
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install MyST CLI
+        run: npm install -g mystmd
+
+      - name: Fetch the site template
+        run: myst build
+
+      - name: Patch theme (expand top-level TOC sections)
+        run: python3 scripts/patch_theme.py
+
+      - name: Build static site
+        run: myst build --html
+        env:
+          # Path prefix for GitHub Pages project sites
+          # (https://electronmicroscopy.github.io/quantem-docs).
+          # Remove if this moves to a custom domain.
+          BASE_URL: /quantem-docs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _build/html
+
+  deploy:
+    # Only deploy on pushes to main, not PR builds
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
