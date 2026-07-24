@@ -4,14 +4,15 @@ title: Overview
 
 # Overview
 
-quantEM (`quantem` on PyPI) is a Python toolkit for quantitative analysis of electron microscopy data. It provides calibrated data structures, file readers, visualization utilities, and analysis pipelines for the main modalities of modern (scanning) transmission electron microscopy.
+quantEM (`quantem` on PyPI) is a Python toolkit for quantitative analysis of transmission electron microscopy data. It provides calibrated data structures, file readers, visualization utilities, and analysis pipelines for the main modalities of modern (scanning) transmission electron microscopy.
 
 ## Design goals
 
 - **Quantitative**: data structures carry physical calibrations (sampling, units, origin) through every analysis step, so results come out in physical units.
 - **One compute backend**: analysis code is built on [PyTorch](https://pytorch.org), so the same code runs on CPU, CUDA GPUs, and Apple-silicon (MPS) devices. See [GPU configuration](../reference/gpu.md).
 - **Modular**: each experimental modality lives in its own subpackage, sharing common infrastructure from `quantem.core`.
-- **Open**: MIT-licensed, developed in the open, with worked examples in the [tutorials repository](https://github.com/electronmicroscopy/quantem-tutorials).
+- **Open**: MIT-licensed, developed as open source, ready for academics and vendors to use.
+- **Tutorials Available**, many worked examples in the [tutorials repository](https://github.com/electronmicroscopy/quantem-tutorials).
 
 ## What's in the box
 

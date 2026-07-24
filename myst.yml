@@ -46,12 +46,13 @@ project:
     - title: Reference
       children:
         - file: reference/api.md
+        - file: reference/data-io.md
         - file: reference/configuration.md
         - file: reference/gpu.md
-        - file: reference/data-io.md
     - title: Project
       children:
         - file: project/cite.md
+        - file: project/acknowledgements.md
         - file: project/contribute.md
         - file: project/license.md
 site:
@@ -67,7 +68,7 @@ site:
   nav:
     - title: Tutorials
       url: https://github.com/electronmicroscopy/quantem-tutorials
-    - title: PyPI Install
+    - title: Install
       url: https://pypi.org/project/quantem/
     - title: Code
       url: https://github.com/electronmicroscopy/quantem

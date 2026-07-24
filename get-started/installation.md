@@ -30,7 +30,7 @@ quantEM uses PyTorch for computation. The default `pip install` pulls in a `torc
 
 Device selection is described in [GPU configuration](../reference/gpu.md).
 
-## Development install
+## Developer install
 
 Development uses [uv](https://docs.astral.sh/uv/):
 

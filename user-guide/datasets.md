@@ -47,10 +47,12 @@ image = Dataset2d.from_array(
 ```python
 from quantem.core import io
 
-image = io.read_2d("image.dm4")                  # 2D images
-scan = io.read_4dstem("scan.h5")                 # 4D-STEM data
-legacy = io.read_emdfile_to_4dstem("data.emd")   # legacy emdFile / py4DSTEM files
+image = io.read_2d("image.dm4")
+scan = io.read_4dstem("scan.h5")
+legacy = io.read_emdfile_to_4dstem("data.emd")
 ```
+
+`read_2d` handles images and single diffraction patterns, `read_4dstem` handles 4D-STEM scans, and `read_emdfile_to_4dstem` handles legacy `emdFile` and py4DSTEM files.
 
 ## Saving and loading quantEM objects
 
@@ -59,9 +61,11 @@ Datasets and analysis objects serialize to Zarr-backed files:
 ```python
 from quantem.core import io
 
-io.load("reconstruction.zip")        # load a saved quantEM object
-io.print_file("reconstruction.zip")  # inspect the contents of a saved file
+io.load("reconstruction.zip")
+io.print_file("reconstruction.zip")
 ```
+
+`load` reconstructs the saved object, and `print_file` prints its structure without loading it.
 
 :::{note}
 This page will be expanded from the `core/vector.ipynb` and `core/config.ipynb` tutorial notebooks.

@@ -105,8 +105,10 @@ def classify():
             cx > 270 and area > 40 and el.get("fill") in (MAROON, RED)
         ):  # detector wedges + dome
             g = "tomo"
-        elif el.get("fill") in BLUES and area > 25 and cx > 190:
-            g = "struct"  # octahedron faces
+        elif el.get("fill") in BLUES and area > 100 and cx > 190:
+            # Octahedron faces are ~208 units; the next largest blue shapes
+            # are ~30 unit diffraction dots, so 100 separates them cleanly.
+            g = "struct"
         elif el.get("fill") == GREEN and area > 25:
             g = "struct"  # A-site cations (diffraction greens are tiny)
         else:
@@ -214,6 +216,7 @@ VIOLET = "rgb(45%, 4%, 60%)"
 PURPLE = "rgb(24%, 10%, 58%)"
 EXTEND = 1.18   # gradient period extension holding the purple wrap segment
 EELS_DUR = "9.5s"   # one period; half the speed of the original 4s design
+TOMO_DUR = "5s"     # time to advance the wheel by exactly one panel
 
 
 def namespace_ids(s, prefix):
@@ -287,7 +290,9 @@ def struct_svg(els, view):
     which identifies the rotation centers exactly.
     """
     faces = [e for e in els if e.get("fill") in BLUES]
-    rest = [e for e in els if e.get("fill") not in BLUES]
+    oxygens = [e for e in els if e.get("fill") == RED]
+    rest = [e for e in els if e.get("fill") not in BLUES
+            and e.get("fill") != RED]
     a_est = (
         sorted(
             math.sqrt((b[2] - b[0]) * (b[3] - b[1]))
@@ -321,6 +326,19 @@ def struct_svg(els, view):
         c = nearest_center(centroid(f))
         clusters.setdefault(c, []).append(f)
 
+    # Oxygens sit on the octahedron corners, so they must rotate with them.
+    # A corner shared by two neighbours moves identically under the
+    # antiphase pattern below, so attaching it to the nearest centre is
+    # consistent for both.
+    for ox in oxygens:
+        c = nearest_center(center(bbox_of(ox)))
+        d = math.hypot(c[0] - center(bbox_of(ox))[0],
+                       c[1] - center(bbox_of(ox))[1])
+        if d < 1.35 * a_est:
+            clusters.setdefault(c, []).append(ox)
+        else:
+            rest.append(ox)
+
     u, v = (25.65, 8.35), (-8.35, 25.65)
     ox, oy = centers[0]
     parts = []
@@ -341,25 +359,70 @@ def struct_svg(els, view):
 
 
 def tomo_svg(els, view, ink):
-    """Detector wheel (wedges plus their projection rays) rotates clockwise
-    behind the horizon clip; the sample dome stays fixed."""
+    """Detector wheel rotating by exactly one panel, colours fixed in space.
+
+    Nine panels tile the visible half ring, so the pitch is exactly
+    180/9 degrees and a copy rotated by 180 completes the wheel. Colour is a
+    property of the *slot*, not the panel: each panel cross-fades to the
+    colour of the slot it rotates into, so the red-orange-yellow-green-cyan-
+    blue bands stay put while the hardware turns. The hidden half carries the
+    mirrored sequence, so a panel rising on the left arrives already dark
+    red rather than dragging navy around from the right. After one pitch the
+    image is identical, which makes the loop seamless.
+    """
     wedges = [e for e in els if not e.get("stroke") and e.get("fill") != BLACK]
     rays = [e for e in els if e.get("stroke")]
     dome = [e for e in els if e.get("fill") == BLACK]
     db = group_bbox(dome)
     cx, cy = (db[0] + db[2]) / 2, db[3]
+
+    def angle(el):
+        px, py = center(bbox_of(el))
+        return math.degrees(math.atan2(cy - py, px - cx))
+
+    wedges.sort(key=angle)          # index 0 = rightmost, n-1 = leftmost
+    n = len(wedges)
+    pitch = 180.0 / n
+    colors = [w.get("fill") for w in wedges]
+
+    def animate(el, frm, to):
+        el = copy.deepcopy(el)
+        el.set("fill", frm)
+        a = ET.SubElement(el, f"{{{SVG}}}animate")
+        a.set("attributeName", "fill")
+        a.set("values", f"{frm};{to}")
+        a.set("dur", TOMO_DUR)
+        a.set("repeatCount", "indefinite")
+        return el
+
+    # Visible half: panel i sits in slot i and rotates into slot i-1.
+    # Panel 0 leaves the visible arc into a hidden slot of its own colour.
+    visible = [
+        animate(w, colors[i], colors[i - 1] if i else colors[0])
+        for i, w in enumerate(wedges)
+    ]
+    # Hidden half (rotated 180): mirrored colours, so slot i of that ring
+    # holds colours[n-1-i] and feeds the left edge with dark red.
+    hidden = [
+        animate(w, colors[n - 1 - i], colors[n - i] if i else colors[n - 1])
+        for i, w in enumerate(wedges)
+    ]
+
     vx, vy, vw, _ = (float(x) for x in view.split())
     clip = (
         f'<clipPath id="horizon"><rect x="{vx}" y="{vy}" width="{vw}" '
         f'height="{cy - vy:.1f}"/></clipPath>'
     )
-    half = serialize(wedges) + serialize(rays, ink)
+    ray_svg = serialize(rays, ink)
     wheel = (
-        f'<g clip-path="url(#horizon)"><g>{half}'
-        f'<g transform="rotate(180 {cx:.1f} {cy:.1f})">{half}</g>'
+        f'<g clip-path="url(#horizon)"><g>'
+        f"{serialize(visible)}{ray_svg}"
+        f'<g transform="rotate(180 {cx:.1f} {cy:.1f})">'
+        f"{serialize(hidden)}{ray_svg}</g>"
         f'<animateTransform attributeName="transform" type="rotate" '
-        f'additive="sum" from="0 {cx:.1f} {cy:.1f}" to="360 {cx:.1f} {cy:.1f}" '
-        f'dur="80s" repeatCount="indefinite"/></g></g>'
+        f'additive="sum" from="0 {cx:.1f} {cy:.1f}" '
+        f'to="{pitch:.4f} {cx:.1f} {cy:.1f}" dur="{TOMO_DUR}" '
+        f'repeatCount="indefinite"/></g></g>'
     )
     return svg_doc(view, clip + wheel + serialize(dome, ink), hit_rect=True)
 

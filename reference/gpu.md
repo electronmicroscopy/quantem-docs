@@ -11,14 +11,16 @@ quantEM computes with PyTorch, so any device torch supports works: CPU, NVIDIA G
 ```python
 from quantem.core import config
 
-config.set_device("gpu")       # first CUDA device if available, else MPS
-config.set_device("cuda:1")    # a specific CUDA device
-config.set_device("mps")       # Apple silicon
+config.set_device("gpu")
+config.set_device("cuda:1")
+config.set_device("mps")
 config.set_device("cpu")
-config.set_device(0)           # integer index → cuda:0
+config.set_device(0)
 
-config.get_device()            # current device string
+config.get_device()
 ```
+
+`"gpu"` selects the first CUDA device when one is available and falls back to MPS on Apple silicon. An integer is treated as a CUDA index, so `0` means `cuda:0`. `get_device` returns the current device as a string.
 
 `set_device` accepts torch-style strings, integer indices, or `torch.device` objects, and validates that the requested device actually exists. Requesting `"gpu"` on a machine with neither CUDA nor MPS raises an error instead of falling back silently.
 

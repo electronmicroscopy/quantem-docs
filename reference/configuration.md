@@ -11,27 +11,30 @@ quantEM has a global configuration system (`quantem.core.config`, modeled on Das
 ```python
 from quantem.core import config
 
-config.get("device")            # read a value
-config.get("viz.cmap")          # nested keys use dotted access
+config.get("device")
+config.get("viz.cmap")
 
-config.set({"precision": "float64"})   # set globally
+config.set({"precision": "float64"})
 ```
 
 `config.set` also works as a context manager for temporary overrides:
 
 ```python
 with config.set({"device": "cuda:1"}):
-    ...  # code here runs on cuda:1
-# previous value is restored on exit
+    ...
 ```
+
+Code inside the block runs on `cuda:1`, and the previous value is restored on exit.
 
 ## Persistent configuration
 
-The active configuration can be written to a YAML file that is loaded on import:
+The active configuration can be written to a YAML file that is read back on import:
 
 ```python
-config.write()   # writes ~/.config/quantem/config.yaml
+config.write()
 ```
+
+This writes `~/.config/quantem/config.yaml`.
 
 The configuration directory can be relocated with the `QUANTEM_CONFIG` environment variable.
 
