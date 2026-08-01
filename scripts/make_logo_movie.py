@@ -88,14 +88,14 @@ def eels_defs_and_body(defs, eels_els, t):
 
 
 def dif_body(els, t):
-    # A crescent arc of enlarged dots travels around the pattern: each dot is
-    # scaled about its own centre by 1 + amp*arc_win(theta - w t), so it swells
-    # only while the arc sweeps over it. The arc goes once around every DIF_P
-    # seconds; amp/arc_win come from build_logo (it rides the outer rings). The
-    # black centre spot never scales.
+    # A moon crescent (two enlarged lobes, ARC_SEP apart) travels around the
+    # pattern: each dot is scaled about its own centre by 1 + amp*profile, so it
+    # swells as each lobe sweeps over it. The crescent goes once around every
+    # DIF_P seconds; amp/_arc_profile come from build_logo (it rides the outer
+    # rings). The black centre spot never scales.
     w = 2.0 * math.pi * t / DIF_P
     out = []
-    for el, cx, cy, frac, amp, isc in B.dif_dots(els):
+    for el, cx, cy, frac, rho, isc in B.dif_dots(els):
         fill = el.get("fill")
         f = INK if fill == B.BLACK else fill
         d = el.get("d")
@@ -103,7 +103,7 @@ def dif_body(els, t):
             out.append(f'<path d="{d}" fill="{f}"/>')
             continue
         theta = 2.0 * math.pi * frac
-        s = 1.0 + amp * B._arc_win(theta - w)
+        s = 1.0 + B.DIR_AMP * B._cres_amp(rho, theta + w)  # +w: CCW sweep
         out.append(
             f'<g transform="translate({cx:.3f} {cy:.3f}) scale({s:.4f}) '
             f'translate({-cx:.3f} {-cy:.3f})"><path d="{d}" fill="{f}"/></g>'

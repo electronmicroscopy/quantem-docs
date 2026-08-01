@@ -461,31 +461,38 @@ def eels_svg(defs, eels_els, view):
     return svg_doc(view, body, hit_rect=True)
 
 
-DIR_IDLE = 24.0     # seconds for the enlarged arc to travel once around, idle
-DIR_AMP = 0.45      # peak enlargement of dots at the centre of the arc
-ARC_HALF = 60.0     # angular half-width of the enlarged arc (deg)
-ARC_SHELL = 1.5     # radial emphasis: higher makes the arc hug the outer rings
+DIR_IDLE = 24.0     # seconds for the crescent to travel once around, idle
+DIR_AMP = 0.675     # peak enlargement of a dot on the crescent
+CRES_SPAN = 60.0    # crescent half-angle (deg): its two tips sit +/-SPAN apart
+CRES_R_OUT = 0.90   # radius (0..1) of the crescent tips (on the outer ring)
+CRES_R_IN = 0.45    # radius at the crescent's middle (the inner/blue ring)
+CRES_SIG = 0.18     # radial thickness of the crescent band
+CRES_BUCKETS = 15   # radial buckets for the per-radius CSS keyframes
 
 
-def _arc_win(dtheta):
-    """Raised-cosine window over the arc: 1 at the arc centre, easing to 0
-    beyond +/-ARC_HALF degrees. `dtheta` is the angle (radians) from the arc
-    centre; it wraps, so the arc is a smooth travelling crescent."""
+def _cres_amp(rho, dtheta):
+    """Crescent enlargement of a dot at (rho, dtheta), where rho is 0..1 and
+    dtheta (radians) is its angle from the crescent's centre direction. The
+    crescent is a curved arc: its two tips reach the outer ring at +/-CRES_SPAN,
+    and it dips inward to the blue ring at the middle, so the tips are joined by
+    a circular arc through the inner dots. Returns 0..1 (scaled by DIR_AMP)."""
     d = (math.degrees(dtheta) + 180.0) % 360.0 - 180.0
-    if abs(d) >= ARC_HALF:
+    if abs(d) > CRES_SPAN:
         return 0.0
-    return 0.5 * (1.0 + math.cos(math.pi * d / ARC_HALF))
+    frac = abs(d) / CRES_SPAN                       # 0 at the middle, 1 at a tip
+    r_t = CRES_R_IN + (CRES_R_OUT - CRES_R_IN) * frac * frac
+    return math.exp(-((rho - r_t) / CRES_SIG) ** 2)
 
 
 def dif_dots(els):
     """Each diffraction dot with the geometry the animation needs:
-    (el, cx, cy, frac, amp, is_center). A crescent-shaped arc of enlarged dots
-    travels around the pattern: a dot's scale is 1 + amp*arc_win(theta - psi(t)),
-    so it swells only while the arc passes over it. `amp` grows with radius
-    (ARC_SHELL) so the arc rides the outer rings; `frac` = theta/2pi is the
-    dot's angle about the centre, which becomes its phase so the arc sweeps in
-    step everywhere. `is_center` flags the black transmitted beam, which never
-    scales; the pattern centre is that black spot."""
+    (el, cx, cy, frac, rho, is_center). A crescent of enlarged dots travels
+    around the pattern: a dot's scale is 1 + DIR_AMP*_cres_amp(rho, theta -
+    psi(t)), so it swells only while the crescent's curved arc passes over it.
+    `frac` = theta/2pi is the dot's angle about the centre (its sweep phase) and
+    `rho` its 0..1 radius (which arm of the crescent it can belong to).
+    `is_center` flags the black transmitted beam, which never scales; the
+    pattern centre is that black spot."""
     dots = [(el, *center(bbox_of(el)), el.get("fill") == BLACK) for el in els]
     ctr = next(((cx, cy) for _, cx, cy, isc in dots if isc), None)
     if ctr is None:
@@ -497,8 +504,7 @@ def dif_dots(els):
     for el, cx, cy, isc in dots:
         frac = (math.atan2(cy - ctr[1], cx - ctr[0]) + math.pi) / (2.0 * math.pi)
         rho = math.hypot(cx - ctr[0], cy - ctr[1]) / rmax
-        amp = DIR_AMP * (rho ** ARC_SHELL)
-        out.append((el, cx, cy, frac, amp, isc))
+        out.append((el, cx, cy, frac, rho, isc))
     return out
 
 
@@ -507,49 +513,52 @@ def dif_static(els, ink):
     return serialize(els, ink)
 
 
-def _dir_keyframes():
-    """One trip of the enlarged arc around the pattern, sampled at 36 stops.
-    The arc is a raised-cosine bump centred at progress 0 (and wrapping at 1),
-    so each dot swells only as the arc sweeps past. Its height is the per-dot
-    CSS variable --amp; the dot's own phase comes from animation-delay."""
-    n = 36
-    stops = []
-    for j in range(n + 1):
-        p = j / n
-        dist = min(p, 1.0 - p) * 360.0   # degrees from the arc centre (p=0/1)
-        b = 0.0 if dist >= ARC_HALF else 0.5 * (1.0 + math.cos(math.pi * dist / ARC_HALF))
-        stops.append(
-            f"{p * 100:.5g}%{{transform:scale(calc(1 + var(--amp) * {b:.4f}))}}"
-        )
-    return "@keyframes qemDir{" + "".join(stops) + "}"
+def _cres_keyframes(buckets):
+    """One @keyframes per radial bucket. Because a dot's enlargement depends on
+    both its radius and the crescent angle, dots at different radii breathe to
+    different shapes, so each radius bucket gets its own keyframe (qemDir<b>)
+    sampling _cres_amp over one trip of the crescent. 48 stops resolves the
+    curved arc; the dot's phase still comes from animation-delay."""
+    n = 48
+    out = []
+    for b in sorted(buckets):
+        rho = b / CRES_BUCKETS
+        stops = []
+        for j in range(n + 1):
+            p = j / n
+            s = 1.0 + DIR_AMP * _cres_amp(rho, 2.0 * math.pi * p)
+            stops.append(f"{p * 100:.5g}%{{transform:scale({s:.4f})}}")
+        out.append(f"@keyframes qemDir{b}{{" + "".join(stops) + "}")
+    return "".join(out)
 
 
 def dif_svg(els, view, ink):
-    # Each dot is Colin's exact object, scaled uniformly about its own centre
-    # as 1 + A*cos(theta - w t): the enlarged lobe points one way and rotates
-    # steadily around the pattern, so it looks like the pattern tilts and
-    # swings its long axis around. Every dot shares one cosine keyframe; its
-    # angle about the centre becomes a phase offset (animation-delay). The
-    # transmitted beam (black centre spot) is drawn once and never scales. The
-    # animation runs slowly; hover just multiplies the playback rate (see the
-    # runtime), so speeding up never jumps. transform-box:fill-box makes each
-    # scale pivot on the dot's own centre.
+    # A crescent of enlarged dots (outer ring at its two tips, dipping through
+    # the inner blue ring in the middle) travels counter-clockwise around the
+    # pattern. A dot's swell depends on its radius and the crescent angle, so
+    # dots are bucketed by radius and each bucket gets its own keyframe; the
+    # dot's angle becomes its phase (animation-delay). The transmitted beam
+    # (black centre spot) is drawn once and never scales. Hover just multiplies
+    # the playback rate (see the runtime), so speeding up never jumps.
+    dots = dif_dots(els)
+    buckets = {round(rho * CRES_BUCKETS) for _, _, _, _, rho, isc in dots if not isc}
     css = (
-        "<style>.qem-difg .qd{--amp:0;transform-box:fill-box;"
-        f"transform-origin:center;animation:qemDir {DIR_IDLE}s linear infinite}}"
-        + _dir_keyframes() + "</style>"
+        "<style>.qem-difg .qd{transform-box:fill-box;transform-origin:center;"
+        f"animation-duration:{DIR_IDLE}s;animation-timing-function:linear;"
+        "animation-iteration-count:infinite}"
+        + _cres_keyframes(buckets) + "</style>"
     )
     body = []
-    for el, cx, cy, frac, amp, isc in dif_dots(els):
+    for el, cx, cy, frac, rho, isc in dots:
         fill = el.get("fill")
         f = ink if (ink and fill == BLACK) else fill
         d = el.get("d")
         if isc:
             body.append(f'<path d="{d}" fill="{f}"/>')
         else:
-            # delay so each dot peaks exactly as the arc centre passes over it
-            delay = (frac - 1.0) * DIR_IDLE
-            st = f"--amp:{amp:.4f};animation-delay:{delay:.3f}s"
+            b = round(rho * CRES_BUCKETS)
+            delay = -frac * DIR_IDLE  # negative: crescent travels counter-clockwise
+            st = f"animation-name:qemDir{b};animation-delay:{delay:.3f}s"
             body.append(f'<path class="qd" d="{d}" fill="{f}" style="{st}"/>')
     return svg_doc(
         view, css + f'<g class="qem-difg">{"".join(body)}</g>', hit_rect=True
