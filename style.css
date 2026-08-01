@@ -138,6 +138,14 @@ html.dark .myst-primary-sidebar-toc .dark\:text-blue-200 {
 .myst-toc > a.myst-toc-item[title="quantEM"] {
   display: none;
 }
+/* book-theme replays a height:0 -> full expand animation on every
+   `data-state=open`. Because the sections are forced open on each
+   client-side navigation, that animation re-fires on every click and
+   the sidebar visibly twitches. The sections start open, so kill the
+   animation and make any real toggle instant. */
+.myst-primary-sidebar-toc .collapsible-content {
+  animation: none !important;
+}
 
 /* ---------- Search ----------
    The theme's dialog-based search is replaced at runtime (see
@@ -251,10 +259,10 @@ header.myst-fm-authors-affiliations {
   display: block;
   height: auto;
 }
-.qem-el-eels   { left: 2.19%;  top: 5.12%;  width: 56.22%; aspect-ratio: 259.06 / 148.09; }
-.qem-el-dif    { left: 13.46%; top: 5.22%;  width: 29.92%; aspect-ratio: 137.87 / 115.78; }
-.qem-el-struct { left: 39.82%; top: 14.11%; width: 23.44%; aspect-ratio: 108.03 / 108.00; }
-.qem-el-tomo   { left: 59.44%; top: 15.96%; width: 38.14%; aspect-ratio: 175.76 / 91.60; }
+.qem-el-eels   { left: 2.19%;  top: 5.12%;  width: 56.22%; aspect-ratio: 259.0 / 148.1; }
+.qem-el-dif    { left: 13.48%; top: 5.26%;  width: 29.88%; aspect-ratio: 137.7 / 115.6; }
+.qem-el-struct { left: 39.82%; top: 14.11%; width: 23.44%; aspect-ratio: 108.0 / 108.0; }
+.qem-el-tomo   { left: 59.35%; top: 17.34%; width: 38.32%; aspect-ratio: 176.6 / 91.4; }
 
 /* Light/dark variants follow the book-theme html.dark toggle. */
 html:not(.dark) .qem-logo-box .qem-logo-dark { display: none; }

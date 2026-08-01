@@ -43,7 +43,68 @@ BLUES = {
 }
 INKS = {"light": "#1A1A1A", "dark": "#F2F2F2"}
 PAD = 4.0  # padding around per-element viewBoxes
-TOMO_DY = -10.0  # lift the tomography element clear of the wordmark
+TOMO_DY = -6.5  # lift the tomography element clear of the wordmark
+
+# The ten canonical logo colours. Fills in the source (or a hand-edited
+# copy) are snapped to the nearest of these on load, so classification is
+# immune to an editor rewriting rgb(...%) as hex or changing precision.
+PALETTE = [
+    RED, GREEN, MAROON, BLACK,
+    "rgb(0%, 24.699402%, 49.798584%)",     # navy
+    "rgb(3.898621%, 52.198792%, 80.799866%)",   # mid blue
+    "rgb(1.998901%, 70.999146%, 90.19928%)",     # cyan
+    "rgb(100%, 49.798584%, 0.39978%)",           # orange
+    "rgb(59.999084%, 92.89856%, 0%)",            # lime
+    "rgb(100%, 74.899292%, 0%)",                 # yellow
+]
+
+
+def parse_color(s):
+    """Return (r, g, b) in 0..1 for rgb(%)/rgb(0-255)/#hex, else None."""
+    if not s:
+        return None
+    s = s.strip()
+    m = re.match(r"rgb\(([^)]*)\)", s)
+    if m:
+        parts = m.group(1).split(",")
+        if len(parts) != 3:
+            return None
+        out = []
+        for p in parts:
+            p = p.strip()
+            if p.endswith("%"):
+                out.append(float(p[:-1]) / 100.0)
+            else:
+                out.append(float(p) / 255.0)
+        return tuple(out)
+    m = re.match(r"#([0-9a-fA-F]{6})$", s)
+    if m:
+        h = m.group(1)
+        return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    m = re.match(r"#([0-9a-fA-F]{3})$", s)
+    if m:
+        h = m.group(1)
+        return tuple(int(c * 2, 16) / 255.0 for c in h)
+    return None
+
+
+_PAL_RGB = [(c, parse_color(c)) for c in PALETTE]
+
+
+def normalize_fills(root, tol=0.18):
+    """Snap every element fill to the nearest canonical colour (in place)."""
+    for el in root.iter():
+        f = el.get("fill")
+        rgb = parse_color(f)
+        if rgb is None:
+            continue
+        best, bd = None, 1e9
+        for canon, crgb in _PAL_RGB:
+            d = sum((rgb[i] - crgb[i]) ** 2 for i in range(3)) ** 0.5
+            if d < bd:
+                best, bd = canon, d
+        if best is not None and bd < tol:
+            el.set("fill", best)
 
 
 def parse_matrix(t):
@@ -64,9 +125,70 @@ def parse_matrix(t):
     return out
 
 
+_PATH_TOK = re.compile(r"[MmLlHhVvCcSsQqTtAaZz]|-?\d*\.?\d+(?:e-?\d+)?")
+
+
+def path_points(d):
+    """Absolute anchor + control points of a path, honouring both absolute
+    and relative commands. pdftocairo emits absolute M/L/C; Illustrator (a
+    hand-edited source) emits relative h/l/c/v, so we must handle both."""
+    toks = _PATH_TOK.findall(d)
+    i, cmd = 0, None
+    cx = cy = sx = sy = 0.0
+    pts = []
+
+    def num():
+        nonlocal i
+        v = float(toks[i])
+        i += 1
+        return v
+
+    while i < len(toks):
+        t = toks[i]
+        if t.isalpha():
+            cmd = t
+            i += 1
+            if cmd in "Zz":
+                cx, cy = sx, sy
+            continue
+        rel = cmd.islower()
+        c = cmd.upper()
+        if c == "M":
+            x, y = num(), num()
+            cx, cy = (cx + x, cy + y) if rel else (x, y)
+            sx, sy = cx, cy
+            pts.append((cx, cy))
+            cmd = "l" if rel else "L"
+        elif c == "L":
+            x, y = num(), num()
+            cx, cy = (cx + x, cy + y) if rel else (x, y)
+            pts.append((cx, cy))
+        elif c == "H":
+            x = num()
+            cx = cx + x if rel else x
+            pts.append((cx, cy))
+        elif c == "V":
+            y = num()
+            cy = cy + y if rel else y
+            pts.append((cx, cy))
+        elif c in ("C", "S", "Q", "T"):
+            for _ in range({"C": 3, "S": 2, "Q": 2, "T": 1}[c]):
+                x, y = num(), num()
+                px, py = (cx + x, cy + y) if rel else (x, y)
+                pts.append((px, py))
+                cx, cy = px, py
+        elif c == "A":
+            num(); num(); num(); num(); num()
+            x, y = num(), num()
+            cx, cy = (cx + x, cy + y) if rel else (x, y)
+            pts.append((cx, cy))
+        else:
+            i += 1
+    return pts
+
+
 def bbox_of(el):
-    nums = [float(x) for x in re.findall(r"-?\d+\.?\d*(?:e-?\d+)?", el.get("d"))]
-    pts = list(zip(nums[0::2], nums[1::2]))
+    pts = path_points(el.get("d"))
     mat = parse_matrix(el.get("transform"))
     if mat:
         a, b, c, d, e, f = mat
@@ -83,6 +205,7 @@ def center(bb):
 def classify():
     tree = ET.parse(os.path.join(ASSETS, "src", "logo53_exact.svg"))
     root = tree.getroot()
+    normalize_fills(root)
     defs = root.find(f"{{{SVG}}}defs")
     groups = {"eels": [], "dif": [], "struct": [], "tomo": [], "text": []}
     for el in list(root):
@@ -93,6 +216,11 @@ def classify():
             groups["eels"].append(el)
             continue
         if tag != "path":
+            continue
+        if el.get("data-qem") == "dif":
+            # explicitly tagged (hand-corrected diffraction); trust it and
+            # skip both the heuristics and the oxygen reassignment below
+            groups["dif"].append(el)
             continue
         bb = bbox_of(el)
         cx, cy = center(bb)
@@ -129,6 +257,9 @@ def classify():
 
     keep_dif = []
     for el in groups["dif"]:
+        if el.get("data-qem") == "dif":  # tagged: never reassign
+            keep_dif.append(el)
+            continue
         bb = bbox_of(el)
         cx = center(bb)[0]
         ok_fill = el.get("fill") == RED  # only oxygens sit on the faces
@@ -144,7 +275,77 @@ def classify():
     for el in groups["tomo"]:
         t = el.get("transform")
         el.set("transform", f"translate(0,{TOMO_DY}) {t}" if t else f"translate(0,{TOMO_DY})")
+
+    # even out the detector wheel (see uniformize_tomo): the hand-drawn wedges
+    # wobble ~0.5 deg, invisible at rest but enough to make the rotation jump
+    # at the loop seam. Regenerate them as exact sectors so a one-pitch turn
+    # lands each wedge precisely on its neighbour.
+    uniformize_tomo(groups["tomo"])
+
+    # Structure z-order: draw faces first, A-site cations next, red oxygens
+    # last, so no octahedron ever hides a red corner. (The animated builder
+    # enforces the same layering across rotating clusters.)
+    def struct_layer(el):
+        fill = el.get("fill")
+        if fill in BLUES:
+            return 0
+        if fill == RED:
+            return 2
+        return 1
+    groups["struct"].sort(key=struct_layer)
     return defs, groups
+
+
+def _fmt(v):
+    return f"{v:.3f}".rstrip("0").rstrip(".")
+
+
+def uniformize_tomo(tomo):
+    """Rewrite the detector wheel as perfectly uniform geometry, in place.
+
+    A one-pitch (180/n) rotation only loops seamlessly if every wedge is an
+    identical sector; the hand-drawn artwork wobbles ~0.5 deg, which is
+    invisible at rest but makes the spinning wheel snap at the seam (most
+    visibly on the dark-red end). We rebuild the wedges as even annular
+    trapezoids and the rays as even radial spokes, keeping each element's fill
+    and the ink stroke, and leave the black dome untouched. Radii are the
+    measured means of the originals, so the look is unchanged."""
+    wedges = [e for e in tomo if not e.get("stroke") and e.get("fill") != BLACK]
+    rays = [e for e in tomo if e.get("stroke")]
+    dome = [e for e in tomo if e.get("fill") == BLACK]
+    if not wedges:
+        return
+    db = group_bbox(dome)
+    cx, cy = (db[0] + db[2]) / 2, db[3]
+    n = len(wedges)
+    pitch = 180.0 / n           # 20 deg for 9 wedges
+    half = 8.5                  # wedge angular half-width (deg); leaves ~3 deg gaps
+    R0, R1 = 70.38, 84.34       # wedge inner / outer radius (measured means)
+    RI, RO = 20.6, 62.1         # ray inner / outer radius (measured means)
+
+    def pt(r, deg):
+        a = math.radians(deg)
+        return cx + r * math.cos(a), cy - r * math.sin(a)
+
+    def ang(el):
+        px, py = center(bbox_of(el))
+        return math.degrees(math.atan2(cy - py, px - cx))
+
+    # order by current centre angle (transforms still intact) so each fill
+    # keeps its slot (navy .. dark red), then rebuild the geometry
+    wedges.sort(key=ang)
+    rays.sort(key=ang)
+    for el in wedges + rays:
+        if el.get("transform"):
+            del el.attrib["transform"]
+    for i, w in enumerate(wedges):
+        c = pitch * (i + 0.5)   # centres at 10, 30, ... 170
+        p = [pt(R0, c - half), pt(R1, c - half), pt(R1, c + half), pt(R0, c + half)]
+        w.set("d", "M" + " L".join(f"{_fmt(x)} {_fmt(y)}" for x, y in p) + " Z")
+    for i, r in enumerate(rays):
+        c = pitch * (i + 0.5)
+        a, b = pt(RI, c), pt(RO, c)
+        r.set("d", f"M{_fmt(a[0])} {_fmt(a[1])} L{_fmt(b[0])} {_fmt(b[1])}")
 
 
 def ink_swap(el, ink):
@@ -260,16 +461,99 @@ def eels_svg(defs, eels_els, view):
     return svg_doc(view, body, hit_rect=True)
 
 
+DIR_IDLE = 24.0     # seconds for the enlarged arc to travel once around, idle
+DIR_AMP = 0.45      # peak enlargement of dots at the centre of the arc
+ARC_HALF = 60.0     # angular half-width of the enlarged arc (deg)
+ARC_SHELL = 1.5     # radial emphasis: higher makes the arc hug the outer rings
+
+
+def _arc_win(dtheta):
+    """Raised-cosine window over the arc: 1 at the arc centre, easing to 0
+    beyond +/-ARC_HALF degrees. `dtheta` is the angle (radians) from the arc
+    centre; it wraps, so the arc is a smooth travelling crescent."""
+    d = (math.degrees(dtheta) + 180.0) % 360.0 - 180.0
+    if abs(d) >= ARC_HALF:
+        return 0.0
+    return 0.5 * (1.0 + math.cos(math.pi * d / ARC_HALF))
+
+
+def dif_dots(els):
+    """Each diffraction dot with the geometry the animation needs:
+    (el, cx, cy, frac, amp, is_center). A crescent-shaped arc of enlarged dots
+    travels around the pattern: a dot's scale is 1 + amp*arc_win(theta - psi(t)),
+    so it swells only while the arc passes over it. `amp` grows with radius
+    (ARC_SHELL) so the arc rides the outer rings; `frac` = theta/2pi is the
+    dot's angle about the centre, which becomes its phase so the arc sweeps in
+    step everywhere. `is_center` flags the black transmitted beam, which never
+    scales; the pattern centre is that black spot."""
+    dots = [(el, *center(bbox_of(el)), el.get("fill") == BLACK) for el in els]
+    ctr = next(((cx, cy) for _, cx, cy, isc in dots if isc), None)
+    if ctr is None:
+        ctr = (sum(d[1] for d in dots) / len(dots),
+               sum(d[2] for d in dots) / len(dots))
+    rmax = max(math.hypot(cx - ctr[0], cy - ctr[1])
+               for _, cx, cy, _ in dots) or 1.0
+    out = []
+    for el, cx, cy, isc in dots:
+        frac = (math.atan2(cy - ctr[1], cx - ctr[0]) + math.pi) / (2.0 * math.pi)
+        rho = math.hypot(cx - ctr[0], cy - ctr[1]) / rmax
+        amp = DIR_AMP * (rho ** ARC_SHELL)
+        out.append((el, cx, cy, frac, amp, isc))
+    return out
+
+
+def dif_static(els, ink):
+    """Resting diffraction: the exact dots, no animation, for the full logo."""
+    return serialize(els, ink)
+
+
+def _dir_keyframes():
+    """One trip of the enlarged arc around the pattern, sampled at 36 stops.
+    The arc is a raised-cosine bump centred at progress 0 (and wrapping at 1),
+    so each dot swells only as the arc sweeps past. Its height is the per-dot
+    CSS variable --amp; the dot's own phase comes from animation-delay."""
+    n = 36
+    stops = []
+    for j in range(n + 1):
+        p = j / n
+        dist = min(p, 1.0 - p) * 360.0   # degrees from the arc centre (p=0/1)
+        b = 0.0 if dist >= ARC_HALF else 0.5 * (1.0 + math.cos(math.pi * dist / ARC_HALF))
+        stops.append(
+            f"{p * 100:.5g}%{{transform:scale(calc(1 + var(--amp) * {b:.4f}))}}"
+        )
+    return "@keyframes qemDir{" + "".join(stops) + "}"
+
+
 def dif_svg(els, view, ink):
-    # class-scoped: inlined <style> applies to the whole page document
+    # Each dot is Colin's exact object, scaled uniformly about its own centre
+    # as 1 + A*cos(theta - w t): the enlarged lobe points one way and rotates
+    # steadily around the pattern, so it looks like the pattern tilts and
+    # swings its long axis around. Every dot shares one cosine keyframe; its
+    # angle about the centre becomes a phase offset (animation-delay). The
+    # transmitted beam (black centre spot) is drawn once and never scales. The
+    # animation runs slowly; hover just multiplies the playback rate (see the
+    # runtime), so speeding up never jumps. transform-box:fill-box makes each
+    # scale pivot on the dot's own centre.
     css = (
-        "<style>.qem-difg path{transform-box:fill-box;transform-origin:center;"
-        "animation:qemPulse 3.5s ease-in-out infinite;"
-        "animation-play-state:var(--qem-play,paused)}"
-        "@keyframes qemPulse{0%{transform:scale(1)}40%{transform:scale(1.3)}"
-        "75%{transform:scale(0.72)}100%{transform:scale(1)}}</style>"
+        "<style>.qem-difg .qd{--amp:0;transform-box:fill-box;"
+        f"transform-origin:center;animation:qemDir {DIR_IDLE}s linear infinite}}"
+        + _dir_keyframes() + "</style>"
     )
-    return svg_doc(view, css + f'<g class="qem-difg">{serialize(els, ink)}</g>', hit_rect=True)
+    body = []
+    for el, cx, cy, frac, amp, isc in dif_dots(els):
+        fill = el.get("fill")
+        f = ink if (ink and fill == BLACK) else fill
+        d = el.get("d")
+        if isc:
+            body.append(f'<path d="{d}" fill="{f}"/>')
+        else:
+            # delay so each dot peaks exactly as the arc centre passes over it
+            delay = (frac - 1.0) * DIR_IDLE
+            st = f"--amp:{amp:.4f};animation-delay:{delay:.3f}s"
+            body.append(f'<path class="qd" d="{d}" fill="{f}" style="{st}"/>')
+    return svg_doc(
+        view, css + f'<g class="qem-difg">{"".join(body)}</g>', hit_rect=True
+    )
 
 
 def face_points(el):
@@ -321,33 +605,34 @@ def struct_svg(els, view):
     def nearest_center(p):
         return min(centers, key=lambda c: (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2)
 
-    clusters = {}
+    cl_faces = {}
     for f in faces:
-        c = nearest_center(centroid(f))
-        clusters.setdefault(c, []).append(f)
+        cl_faces.setdefault(nearest_center(centroid(f)), []).append(f)
 
-    # Oxygens sit on the octahedron corners, so they must rotate with them.
-    # A corner shared by two neighbours moves identically under the
-    # antiphase pattern below, so attaching it to the nearest centre is
-    # consistent for both.
+    # Oxygens sit on the octahedron corners, so they rotate with the nearest
+    # cluster. They are drawn in a second pass, on top of every face, so a
+    # neighbouring octahedron never hides a red corner (a shared corner moves
+    # identically under the antiphase pattern, so its cluster choice is moot).
+    cl_oxy = {}
+    loose_oxy = []
     for ox in oxygens:
         c = nearest_center(center(bbox_of(ox)))
-        d = math.hypot(c[0] - center(bbox_of(ox))[0],
-                       c[1] - center(bbox_of(ox))[1])
-        if d < 1.35 * a_est:
-            clusters.setdefault(c, []).append(ox)
+        oc = center(bbox_of(ox))
+        if math.hypot(c[0] - oc[0], c[1] - oc[1]) < 1.35 * a_est:
+            cl_oxy.setdefault(c, []).append(ox)
         else:
-            rest.append(ox)
+            loose_oxy.append(ox)
 
     u, v = (25.65, 8.35), (-8.35, 25.65)
-    ox, oy = centers[0]
-    parts = []
-    for (cx, cy), members in clusters.items():
-        du = ((cx - ox) * u[0] + (cy - oy) * u[1]) / (u[0] ** 2 + u[1] ** 2)
-        dv = ((cx - ox) * v[0] + (cy - oy) * v[1]) / (v[0] ** 2 + v[1] ** 2)
+    ox0, oy0 = centers[0]
+
+    def rot_group(cxy, members):
+        cx, cy = cxy
+        du = ((cx - ox0) * u[0] + (cy - oy0) * u[1]) / (u[0] ** 2 + u[1] ** 2)
+        dv = ((cx - ox0) * v[0] + (cy - oy0) * v[1]) / (v[0] ** 2 + v[1] ** 2)
         amp = 8 if (round(du) + round(dv)) % 2 == 0 else -8
         c = f"{cx:.1f} {cy:.1f}"
-        parts.append(
+        return (
             f"<g>{serialize(members)}"
             f'<animateTransform attributeName="transform" type="rotate" '
             f'values="0 {c};{amp} {c};0 {c};{-amp} {c};0 {c}" '
@@ -355,7 +640,15 @@ def struct_svg(els, view):
             f'keySplines="0.45 0 0.55 1;0.45 0 0.55 1;0.45 0 0.55 1;'
             f'0.45 0 0.55 1" dur="6s" repeatCount="indefinite"/></g>'
         )
-    return svg_doc(view, "".join(parts) + serialize(rest), hit_rect=True)
+
+    # layer order (bottom -> top): faces, then greens/misc, then oxygens
+    faces_layer = "".join(rot_group(c, m) for c, m in cl_faces.items())
+    mids_layer = serialize(rest)          # A-site cations and anything else
+    oxy_layer = "".join(rot_group(c, m) for c, m in cl_oxy.items())
+    oxy_layer += serialize(loose_oxy)
+    return svg_doc(
+        view, faces_layer + mids_layer + oxy_layer, hit_rect=True
+    )
 
 
 def tomo_svg(els, view, ink):
@@ -433,10 +726,15 @@ def main():
     defs_s = ET.tostring(defs, encoding="unicode")
     order = ("eels", "dif", "struct", "tomo", "text")
 
-    # full static logo
+    # full static logo (diffraction drawn as ellipses, like the animation)
+    def group_svg(n, ink):
+        if n == "dif":
+            return dif_static(groups["dif"], ink)
+        return serialize(groups[n], ink)
+
     for mode, ink in INKS.items():
         parts = [defs_s] + [
-            f'<g id="qem-{n}">{serialize(groups[n], ink)}</g>' for n in order
+            f'<g id="qem-{n}">{group_svg(n, ink)}</g>' for n in order
         ]
         write(
             os.path.join(ASSETS, f"quantem-logo-{mode}.svg"),

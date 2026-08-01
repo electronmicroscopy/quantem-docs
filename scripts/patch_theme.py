@@ -33,18 +33,40 @@ TARGETS = [
 # pauses it in its current state. Appended to the client entry bundle.
 _RUNTIME = """
 ;(function(){
-  /* ---------- landing-page logo: inline the layers, hover to animate ---- */
+  /* ---------- landing-page logo: inline the layers, animate ------------
+     Every element runs continuously: slow when idle, ~4x while hovered.
+     Diffraction is a CSS animation running at its slow idle speed; on hover
+     we multiply each animation's playbackRate, which changes speed without
+     moving the playhead, so it never jumps. The SMIL elements (eels, struct,
+     tomo) are hand-driven with setCurrentTime for the same smooth rate. */
+  var IDLE=0.25, BOOST=1/IDLE, DIF_BOOST=5;
   function activate(svg){
-    try{svg.setCurrentTime(0);svg.pauseAnimations();}catch(e){}
-    svg.style.setProperty('--qem-play','paused');
-    svg.addEventListener('mouseenter',function(){
-      try{svg.unpauseAnimations();}catch(e){}
-      svg.style.setProperty('--qem-play','running');
-    });
-    svg.addEventListener('mouseleave',function(){
-      try{svg.pauseAnimations();}catch(e){}
-      svg.style.setProperty('--qem-play','paused');
-    });
+    var cls=svg.getAttribute('class')||'';
+    if(/qem-el-dif/.test(cls)){
+      function setRate(r){
+        try{svg.getAnimations({subtree:true}).forEach(function(a){
+          a.playbackRate=r;});}catch(e){}
+      }
+      svg.addEventListener('mouseenter',function(){setRate(DIF_BOOST);});
+      svg.addEventListener('mouseleave',function(){setRate(1);});
+      return;
+    }
+    // SMIL: freeze the built-in clock and advance it ourselves
+    try{svg.pauseAnimations();}catch(e){}
+    var t=0,rate=IDLE,last=null;
+    svg.addEventListener('mouseenter',function(){rate=1;});
+    svg.addEventListener('mouseleave',function(){rate=IDLE;});
+    function step(now){
+      if(last!==null){
+        var dt=(now-last)/1000;
+        if(dt>0.1)dt=0.1;   // clamp so returning from a hidden tab doesn't jump
+        t+=dt*rate;
+        try{svg.setCurrentTime(t);}catch(e){}
+      }
+      last=now;
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
   var cache={};
   function swap(img){
@@ -274,7 +296,7 @@ def main():
     tag = json.dumps("<script>" + INLINER + "</script></body>")
     if INLINER_MARK in bsrc:
         print("already patched: build/index.js (logo runtime)")
-    elif "qem-logo-runtime" in bsrc or "qem-runtime-v" in bsrc:  # older runtime version: swap it out
+    elif "qem-runtime" in bsrc or "qem-logo-runtime" in bsrc:  # older runtime: swap it out
         new_bsrc, n = re.subn(
             r'"<script>[^"]*qem-(?:logo-)?runtime[^"]*</script></body>"',
             lambda m: tag,

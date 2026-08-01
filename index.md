@@ -53,7 +53,7 @@ site:
 
 :::{div}
 :class: qem-tagline
-**quantEM** is an open source Python toolkit for quantitative electron microscopy: imaging, diffraction, simulation, ptychography, tomography, and spectroscopy. It is built on PyTorch, runs on CPUs and GPUs, and integrates deep learning methods.
+**quantEM** is an open source Python toolkit for quantitative electron microscopy: imaging, diffraction, ptychography, tomography, and spectroscopy. Built on PyTorch, it runs on CPUs and GPUs and integrates deep learning.
 :::
 
 ::::{grid} 1 2 2 3
