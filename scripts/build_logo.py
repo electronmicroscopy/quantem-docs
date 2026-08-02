@@ -461,38 +461,48 @@ def eels_svg(defs, eels_els, view):
     return svg_doc(view, body, hit_rect=True)
 
 
-DIR_IDLE = 24.0     # seconds for the crescent to travel once around, idle
-DIR_AMP = 0.675     # peak enlargement of a dot on the crescent
-CRES_SPAN = 60.0    # crescent half-angle (deg): its two tips sit +/-SPAN apart
-CRES_R_OUT = 0.90   # radius (0..1) of the crescent tips (on the outer ring)
-CRES_R_IN = 0.45    # radius at the crescent's middle (the inner/blue ring)
-CRES_SIG = 0.18     # radial thickness of the crescent band
-CRES_BUCKETS = 15   # radial buckets for the per-radius CSS keyframes
+DIR_IDLE = 24.0     # seconds for the Laue arc to sweep once around, at idle
+DIR_AMP = 0.55      # peak enlargement of a spot on the excited arc
+DIR_SHRINK = 0.22   # how much the far side (opposite the arc) shrinks
+LAUE_D = 0.52       # Laue-circle offset (0..1): the arc bulges out to 2*LAUE_D
+LAUE_SIG = 0.10     # sharpness of the excited band (smaller = sharper arc)
+CRES_BUCKETS = 20   # radial buckets for the per-radius CSS keyframes
 
 
-def _cres_amp(rho, dtheta):
-    """Crescent enlargement of a dot at (rho, dtheta), where rho is 0..1 and
-    dtheta (radians) is its angle from the crescent's centre direction. The
-    crescent is a curved arc: its two tips reach the outer ring at +/-CRES_SPAN,
-    and it dips inward to the blue ring at the middle, so the tips are joined by
-    a circular arc through the inner dots. Returns 0..1 (scaled by DIR_AMP)."""
-    d = (math.degrees(dtheta) + 180.0) % 360.0 - 180.0
-    if abs(d) > CRES_SPAN:
+def _laue_exc(rho, dtheta):
+    """Excitation of a spot at (rho, dtheta) by the Ewald sphere under tilt.
+
+    Tilting the crystal sweeps the Ewald sphere through reciprocal space; the
+    strongly excited reflections lie on the Laue circle, which passes through
+    the origin (000) and bulges toward the tilt direction. In polar form that
+    circle is rho = 2*LAUE_D*cos(dtheta), where dtheta is the spot's angle from
+    the tilt direction. A spot lights up (returns ~1) when it sits on that
+    circle, within LAUE_SIG; only the near half (cos > 0) is on the arc."""
+    c = math.cos(dtheta)
+    if c <= 0.0:
         return 0.0
-    frac = abs(d) / CRES_SPAN                       # 0 at the middle, 1 at a tip
-    r_t = CRES_R_IN + (CRES_R_OUT - CRES_R_IN) * frac * frac
-    return math.exp(-((rho - r_t) / CRES_SIG) ** 2)
+    return math.exp(-((rho - 2.0 * LAUE_D * c) / LAUE_SIG) ** 2)
+
+
+def _cres_scale(rho, dtheta):
+    """Full scale for a spot at (rho, angle-from-tilt-direction): the sharp
+    Laue-arc enlargement, minus a shrink that grows toward the far side
+    (opposite the arc) and with radius, so the excited arc stands out and the
+    far side pulls in. The black centre spot is handled separately, never
+    scaling, so 000 stays put as the arc pivots about it."""
+    d = (math.degrees(dtheta) + 180.0) % 360.0 - 180.0
+    far = 0.5 - 0.5 * math.cos(math.radians(d))     # 0 on the arc side, 1 opposite
+    return 1.0 + DIR_AMP * _laue_exc(rho, dtheta) - DIR_SHRINK * far * rho
 
 
 def dif_dots(els):
     """Each diffraction dot with the geometry the animation needs:
-    (el, cx, cy, frac, rho, is_center). A crescent of enlarged dots travels
-    around the pattern: a dot's scale is 1 + DIR_AMP*_cres_amp(rho, theta -
-    psi(t)), so it swells only while the crescent's curved arc passes over it.
-    `frac` = theta/2pi is the dot's angle about the centre (its sweep phase) and
-    `rho` its 0..1 radius (which arm of the crescent it can belong to).
-    `is_center` flags the black transmitted beam, which never scales; the
-    pattern centre is that black spot."""
+    (el, cx, cy, frac, rho, is_center). A sharp Laue arc of excited spots (the
+    Ewald sphere under tilt) sweeps around the pattern: a spot's scale is
+    _cres_scale(rho, theta - psi(t)), so it lights up only while the arc crosses
+    its radius. `frac` = theta/2pi is the spot's angle about the centre (its
+    sweep phase) and `rho` its 0..1 radius. `is_center` flags the black
+    transmitted beam, which never scales; the pattern centre is that 000 spot."""
     dots = [(el, *center(bbox_of(el)), el.get("fill") == BLACK) for el in els]
     ctr = next(((cx, cy) for _, cx, cy, isc in dots if isc), None)
     if ctr is None:
@@ -517,8 +527,8 @@ def _cres_keyframes(buckets):
     """One @keyframes per radial bucket. Because a dot's enlargement depends on
     both its radius and the crescent angle, dots at different radii breathe to
     different shapes, so each radius bucket gets its own keyframe (qemDir<b>)
-    sampling _cres_amp over one trip of the crescent. 48 stops resolves the
-    curved arc; the dot's phase still comes from animation-delay."""
+    sampling _cres_scale over one trip of the arc. 48 stops resolves the sharp
+    band; the dot's phase still comes from animation-delay."""
     n = 48
     out = []
     for b in sorted(buckets):
@@ -526,7 +536,7 @@ def _cres_keyframes(buckets):
         stops = []
         for j in range(n + 1):
             p = j / n
-            s = 1.0 + DIR_AMP * _cres_amp(rho, 2.0 * math.pi * p)
+            s = _cres_scale(rho, 2.0 * math.pi * p)
             stops.append(f"{p * 100:.5g}%{{transform:scale({s:.4f})}}")
         out.append(f"@keyframes qemDir{b}{{" + "".join(stops) + "}")
     return "".join(out)

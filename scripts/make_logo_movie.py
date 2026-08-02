@@ -88,11 +88,10 @@ def eels_defs_and_body(defs, eels_els, t):
 
 
 def dif_body(els, t):
-    # A moon crescent (two enlarged lobes, ARC_SEP apart) travels around the
-    # pattern: each dot is scaled about its own centre by 1 + amp*profile, so it
-    # swells as each lobe sweeps over it. The crescent goes once around every
-    # DIF_P seconds; amp/_arc_profile come from build_logo (it rides the outer
-    # rings). The black centre spot never scales.
+    # A sharp Laue arc (the Ewald sphere under tilt) sweeps around the pattern:
+    # each spot is scaled about its own centre by _cres_scale, lighting up as
+    # the arc crosses its radius. The arc goes once around every DIF_P seconds;
+    # the model comes from build_logo. The black centre (000) spot never scales.
     w = 2.0 * math.pi * t / DIF_P
     out = []
     for el, cx, cy, frac, rho, isc in B.dif_dots(els):
@@ -103,7 +102,7 @@ def dif_body(els, t):
             out.append(f'<path d="{d}" fill="{f}"/>')
             continue
         theta = 2.0 * math.pi * frac
-        s = 1.0 + B.DIR_AMP * B._cres_amp(rho, theta + w)  # +w: CCW sweep
+        s = B._cres_scale(rho, theta + w)  # +w: CCW sweep
         out.append(
             f'<g transform="translate({cx:.3f} {cy:.3f}) scale({s:.4f}) '
             f'translate({-cx:.3f} {-cy:.3f})"><path d="{d}" fill="{f}"/></g>'

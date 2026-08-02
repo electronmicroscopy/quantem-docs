@@ -37,8 +37,14 @@ project:
             - file: user-guide/diffraction/strain-mapping.md
         - file: user-guide/diffractive-imaging/index.md
           children:
-            - file: user-guide/diffractive-imaging/ptychography.md
+            - file: user-guide/diffractive-imaging/preparing-data.md
             - file: user-guide/diffractive-imaging/direct-ptychography.md
+            - file: user-guide/diffractive-imaging/ptychography.md
+            - file: user-guide/diffractive-imaging/multislice.md
+            - file: user-guide/diffractive-imaging/regularization.md
+            - file: user-guide/diffractive-imaging/hyperparameters.md
+            - file: user-guide/diffractive-imaging/scaling.md
+            - file: user-guide/diffractive-imaging/troubleshooting.md
         - file: user-guide/tomography/index.md
           children:
             - file: user-guide/tomography/reconstruction.md
