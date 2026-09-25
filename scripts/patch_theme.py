@@ -340,25 +340,37 @@ def main():
         print(f"patched build/index.js (logo runtime, {n} site)")
     # rename the patched entry + manifest so browsers that cached the stock
     # bundles (1-year immutable) fetch the patched versions
-    rename = [("entry.client-PCJPW7TK", "entry.client-QEMRT1"),
-              ("manifest-C732C875", "manifest-QEMRT1")]
+    # Rename the patched entry + manifest so browsers that cached the stock
+    # bundles (1-year immutable) fetch the patched versions. The stock names
+    # carry the theme's own content hashes, so discover them instead of
+    # hardcoding: a theme update changes the hash, and a hardcoded name then
+    # fails the build.
+    import glob, shutil
     pub = os.path.join(THEME, "public", "build")
-    if not os.path.exists(os.path.join(pub, "entry.client-QEMRT1.js")):
-        import shutil
-        for old, new in rename:
-            shutil.copyfile(
-                os.path.join(pub, f"{old}.js"), os.path.join(pub, f"{new}.js")
-            )
-        for path in [os.path.join(THEME, "build", "index.js")] + [
-            os.path.join(pub, "manifest-QEMRT1.js")
-        ]:
-            with open(path) as f:
-                s = f.read()
+    new_entry, new_manifest = "entry.client-QEMRT1", "manifest-QEMRT1"
+    if not os.path.exists(os.path.join(pub, f"{new_entry}.js")):
+        rename = []
+        for stem, new in (("entry.client-", new_entry), ("manifest-", new_manifest)):
+            hits = [f for f in sorted(glob.glob(os.path.join(pub, stem + "*.js")))
+                    if os.path.basename(f)[:-3] != new]
+            if len(hits) == 1:
+                rename.append((os.path.basename(hits[0])[:-3], new))
+        if len(rename) == 2:
             for old, new in rename:
-                s = s.replace(old, new)
-            with open(path, "w") as f:
-                f.write(s)
-        print("renamed entry.client + manifest (cache bust)")
+                shutil.copyfile(
+                    os.path.join(pub, f"{old}.js"), os.path.join(pub, f"{new}.js")
+                )
+            for path in [os.path.join(THEME, "build", "index.js"),
+                         os.path.join(pub, f"{new_manifest}.js")]:
+                with open(path) as f:
+                    s = f.read()
+                for old, new in rename:
+                    s = s.replace(old, new)
+                with open(path, "w") as f:
+                    f.write(s)
+            print("renamed entry.client + manifest (cache bust)")
+        else:
+            print("skipped cache-bust rename: stock bundle names not found")
 
     for path in TARGETS:
         with open(path) as f:
