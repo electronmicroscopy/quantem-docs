@@ -39,7 +39,7 @@ _RUNTIME = """
      we multiply each animation's playbackRate, which changes speed without
      moving the playhead, so it never jumps. The SMIL elements (eels, struct,
      tomo) are hand-driven with setCurrentTime for the same smooth rate. */
-  var IDLE=0.25, BOOST=1/IDLE, DIF_BOOST=5;
+  var IDLE=0.25, BOOST=1/IDLE, DIF_BOOST=2.5;
   function activate(svg){
     var cls=svg.getAttribute('class')||'';
     if(/qem-el-dif/.test(cls)){
@@ -95,18 +95,35 @@ _RUNTIME = """
   }
 
   /* ---------- flat top-bar search (replaces the theme's dialog) -------- */
-  var idx=null,loading=false,waiters=[];
+  var idx=null,loading=false,waiters=[],base='';
+  /* The index and the record URLs are both written from the site root, so on a
+     GitHub Pages project site the fetch has to be prefixed or it 404s, and the
+     hit URLs have to carry the same prefix or every result lands on the 404
+     page. Probe for the prefix that serves the index and keep it. */
+  function basePrefixes(){
+    var seg=window.location.pathname.split('/').filter(Boolean);
+    return seg.length?['/'+seg[0],'']:[''];
+  }
+  function href(u){
+    return (u&&u.charAt(0)==='/')?base+u:u;
+  }
   function load(cb){
     if(cb&&idx)return cb();
     if(cb)waiters.push(cb);
     if(idx||loading)return;
     loading=true;
-    fetch('/myst.search.json').then(function(r){return r.json();})
-      .then(function(d){
-        idx=d.records||[];loading=false;
+    var pre=basePrefixes();
+    function attempt(i){
+      if(i>=pre.length){loading=false;waiters=[];return;}
+      fetch(pre[i]+'/myst.search.json').then(function(r){
+        if(!r.ok)throw new Error('http '+r.status);
+        return r.json();
+      }).then(function(d){
+        idx=d.records||[];base=pre[i];loading=false;
         var w=waiters;waiters=[];w.forEach(function(f){f();});
-      })
-      .catch(function(){loading=false;waiters=[];});
+      }).catch(function(){attempt(i+1);});
+    }
+    attempt(0);
   }
   function titleOf(h){
     return [h.lvl3,h.lvl2,h.lvl1].filter(Boolean)[0]||'';
@@ -167,7 +184,7 @@ _RUNTIME = """
       if(!hits.length){list.hidden=true;return;}
       hits.forEach(function(h,i){
         var a=document.createElement('a');
-        a.href=h.url;
+        a.href=href(h.url);
         a.className='qem-search-hit'+(i===active?' active':'');
         var t=document.createElement('div');
         t.className='qem-search-hit-title';
@@ -201,7 +218,7 @@ _RUNTIME = """
         render();
       }else if(ev.key==='Enter'){
         var h=hits[active<0?0:active];
-        if(h){ev.preventDefault();window.location.href=h.url;}
+        if(h){ev.preventDefault();window.location.href=href(h.url);}
       }else if(ev.key==='Escape'){
         input.value='';hits=[];render();input.blur();
       }
