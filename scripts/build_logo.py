@@ -461,46 +461,56 @@ def eels_svg(defs, eels_els, view):
     return svg_doc(view, body, hit_rect=True)
 
 
-DIR_IDLE = 24.0     # seconds for the Laue arc to sweep once around, at idle
-DIR_AMP = 0.55      # peak enlargement of a spot on the excited arc
-DIR_SHRINK = 0.22   # how much the far side (opposite the arc) shrinks
-LAUE_D = 0.52       # Laue-circle offset (0..1): the arc bulges out to 2*LAUE_D
-LAUE_SIG = 0.10     # sharpness of the excited band (smaller = sharper arc)
+DIR_IDLE = 24.0     # seconds for the Laue ring to sweep once around, at idle
+DIR_BASE = 0.80     # size of an unexcited spot, on or off the ring's inside
+DIR_PEAK = 1.42     # size of a spot sitting on the Laue ring
+LAUE_R = 0.64       # ring radius: its curvature, as a fraction of the pattern
+LAUE_D = 0.38       # tilt magnitude: how far the ring centre sits off 000
+LAUE_SIG = 0.15     # ring thickness, in units of radius
 CRES_BUCKETS = 20   # radial buckets for the per-radius CSS keyframes
 
 
 def _laue_exc(rho, dtheta):
     """Excitation of a spot at (rho, dtheta) by the Ewald sphere under tilt.
 
-    Tilting the crystal sweeps the Ewald sphere through reciprocal space; the
-    strongly excited reflections lie on the Laue circle, which passes through
-    the origin (000) and bulges toward the tilt direction. In polar form that
-    circle is rho = 2*LAUE_D*cos(dtheta), where dtheta is the spot's angle from
-    the tilt direction. A spot lights up (returns ~1) when it sits on that
-    circle, within LAUE_SIG; only the near half (cos > 0) is on the arc."""
-    c = math.cos(dtheta)
-    if c <= 0.0:
-        return 0.0
-    return math.exp(-((rho - 2.0 * LAUE_D * c) / LAUE_SIG) ** 2)
+    The strongly excited reflections lie on the Laue circle, of radius LAUE_R,
+    whose centre sits a distance LAUE_D from 000 along the tilt direction. A
+    spot lights up when it lands within LAUE_SIG of that circle, so the
+    excitation is a Gaussian in the spot's distance from the ring.
+
+    Radius and offset are kept independent on purpose. A circle constrained to
+    pass exactly through 000 has radius equal to its offset, and its distance
+    from 000 then collapses as cos(dtheta), which tucks the arc into the middle
+    of the pattern and makes it curve far too tightly. Letting LAUE_R exceed
+    LAUE_D keeps 000 just inside the rim instead of on it, so the ring holds a
+    large radius over a much wider sweep: its reach from 000 runs from
+    LAUE_R - LAUE_D behind the tilt to LAUE_R + LAUE_D along it. At the values
+    set above the prominent outer spots span about 160 degrees of arc, against
+    roughly 120 for a circle through 000."""
+    dist = math.sqrt(rho * rho + LAUE_D * LAUE_D
+                     - 2.0 * rho * LAUE_D * math.cos(dtheta))
+    return math.exp(-(((dist - LAUE_R) / LAUE_SIG) ** 2))
 
 
 def _cres_scale(rho, dtheta):
-    """Full scale for a spot at (rho, angle-from-tilt-direction): the sharp
-    Laue-arc enlargement, minus a shrink that grows toward the far side
-    (opposite the arc) and with radius, so the excited arc stands out and the
-    far side pulls in. The black centre spot is handled separately, never
-    scaling, so 000 stays put as the arc pivots about it."""
-    d = (math.degrees(dtheta) + 180.0) % 360.0 - 180.0
-    far = 0.5 - 0.5 * math.cos(math.radians(d))     # 0 on the arc side, 1 opposite
-    return 1.0 + DIR_AMP * _laue_exc(rho, dtheta) - DIR_SHRINK * far * rho
+    """Scale for a spot at (rho, angle-from-tilt-direction).
+
+    Size tracks excitation and nothing else: a spot rests at DIR_BASE and
+    swells to DIR_PEAK as it approaches the Laue circle. Because there is no
+    directional term, spots inside the circle shrink just as much as those
+    outside it, which is what makes the excited reflections read as a closed
+    ring with a hollow middle rather than as a crescent, matching a real tilt
+    series. The black centre spot is handled separately and never scales, so
+    000 stays put just inside the rim as the ring pivots around it."""
+    return DIR_BASE + (DIR_PEAK - DIR_BASE) * _laue_exc(rho, dtheta)
 
 
 def dif_dots(els):
     """Each diffraction dot with the geometry the animation needs:
-    (el, cx, cy, frac, rho, is_center). A sharp Laue arc of excited spots (the
-    Ewald sphere under tilt) sweeps around the pattern: a spot's scale is
-    _cres_scale(rho, theta - psi(t)), so it lights up only while the arc crosses
-    its radius. `frac` = theta/2pi is the spot's angle about the centre (its
+    (el, cx, cy, frac, rho, is_center). A Laue ring of excited spots (the
+    Ewald sphere under tilt) pivots around the pattern: a spot's scale is
+    _cres_scale(rho, theta - psi(t)), so it swells only while the ring crosses
+    it. `frac` = theta/2pi is the spot's angle about the centre (its
     sweep phase) and `rho` its 0..1 radius. `is_center` flags the black
     transmitted beam, which never scales; the pattern centre is that 000 spot."""
     dots = [(el, *center(bbox_of(el)), el.get("fill") == BLACK) for el in els]
@@ -525,11 +535,12 @@ def dif_static(els, ink):
 
 def _cres_keyframes(buckets):
     """One @keyframes per radial bucket. Because a dot's enlargement depends on
-    both its radius and the crescent angle, dots at different radii breathe to
+    both its radius and the tilt angle, dots at different radii breathe to
     different shapes, so each radius bucket gets its own keyframe (qemDir<b>)
-    sampling _cres_scale over one trip of the arc. 48 stops resolves the sharp
-    band; the dot's phase still comes from animation-delay."""
-    n = 48
+    sampling _cres_scale over one trip of the ring. 72 stops (5 degrees each)
+    resolves the ring, which a dot crosses over roughly 30 degrees of sweep;
+    the dot's phase still comes from animation-delay."""
+    n = 72
     out = []
     for b in sorted(buckets):
         rho = b / CRES_BUCKETS
@@ -543,9 +554,9 @@ def _cres_keyframes(buckets):
 
 
 def dif_svg(els, view, ink):
-    # A crescent of enlarged dots (outer ring at its two tips, dipping through
-    # the inner blue ring in the middle) travels counter-clockwise around the
-    # pattern. A dot's swell depends on its radius and the crescent angle, so
+    # A Laue ring of enlarged dots, passing through the centre spot and
+    # reaching out to the pattern edge opposite it, pivots counter-clockwise
+    # around the pattern. A dot's swell depends on its radius and tilt angle, so
     # dots are bucketed by radius and each bucket gets its own keyframe; the
     # dot's angle becomes its phase (animation-delay). The transmitted beam
     # (black centre spot) is drawn once and never scales. Hover just multiplies

@@ -88,10 +88,11 @@ def eels_defs_and_body(defs, eels_els, t):
 
 
 def dif_body(els, t):
-    # A sharp Laue arc (the Ewald sphere under tilt) sweeps around the pattern:
-    # each spot is scaled about its own centre by _cres_scale, lighting up as
-    # the arc crosses its radius. The arc goes once around every DIF_P seconds;
-    # the model comes from build_logo. The black centre (000) spot never scales.
+    # A Laue ring (the Ewald sphere under tilt) pivots around the pattern: each
+    # spot is scaled about its own centre by _cres_scale, swelling as the ring
+    # crosses it. The ring goes once around every DIF_P seconds; the model comes
+    # from build_logo. The black centre (000) spot never scales, so the ring
+    # pivots about it with 000 always on the rim.
     w = 2.0 * math.pi * t / DIF_P
     out = []
     for el, cx, cy, frac, rho, isc in B.dif_dots(els):
