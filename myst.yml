@@ -34,7 +34,10 @@ project:
         - file: user-guide/diffraction/index.md
           children:
             - file: user-guide/diffraction/disk-detection.md
+            - file: user-guide/diffraction/calibration.md
+            - file: user-guide/diffraction/orientation-mapping.md
             - file: user-guide/diffraction/strain-mapping.md
+            - file: user-guide/diffraction/diffraction-simulation.md
         - file: user-guide/diffractive-imaging/index.md
           children:
             - file: user-guide/diffractive-imaging/preparing-data.md

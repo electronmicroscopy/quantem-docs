@@ -19,6 +19,11 @@ G. Varnavides, J. M. Bekkevold, S. M. Ribet, M. C. Scott, L. Jones, C. Ophus, *R
 **Tomography with implicit neural representations**
 C. Lim, C. Casert, A. R. C. McCray, S. Lee, A. Barnum, J. Dionne, C. Ophus, *Missing wedge inpainting and joint alignment in electron tomography through implicit neural representations*, 2025. [arXiv:2512.08113](https://arxiv.org/abs/2512.08113)
 
+**Automated crystal orientation mapping (ACOM)**
+C. Ophus, S. E. Zeltmann, A. Bruefach, A. Rakowski, B. H. Savitzky, A. M. Minor, M. C. Scott, *Automated crystal orientation mapping in py4DSTEM using sparse correlation matching*, Microscopy and Microanalysis **28**, 390 (2022). [doi:10.1017/S1431927622000101](https://doi.org/10.1017/S1431927622000101)
+
+For two-phase orientation and phase mapping with scanning precession electron diffraction, and for the titanium dataset used in the [orientation and phase mapping](../user-guide/diffraction/orientation-mapping.md) examples, also cite I. MacLaren, E. Frutos-Myro, S. Zeltmann, C. Ophus, *A method for crystallographic mapping of an alpha-beta titanium alloy with nanometre resolution using scanning precession electron diffraction and open-source software libraries*, Journal of Microscopy **295**, 131 (2024). [doi:10.1111/jmi.13275](https://doi.org/10.1111/jmi.13275)
+
 **Multi-angle precession electron diffraction (MAPED)**
 S. M. Ribet, R. Dhall, C. Ophus, K. C. Bustillo, *Multi-angle precession electron diffraction (MAPED): a versatile approach to 4D-STEM precession*, Microscopy and Microanalysis **31**, 6 (2025). [doi:10.1093/mam/ozaf103](https://doi.org/10.1093/mam/ozaf103)
 

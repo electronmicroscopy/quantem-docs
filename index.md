@@ -70,7 +70,7 @@ Drift correction and lattice analysis for atomic resolution images.
 
 :::{card} 💠 Diffraction
 :link: ./user-guide/diffraction/index.md
-Bragg disk detection, model fitting, and strain mapping for 4D-STEM.
+Bragg disk detection, orientation and phase mapping, strain mapping, and diffraction simulation for 4D-STEM.
 :::
 
 :::{card} 🌀 Diffractive imaging
